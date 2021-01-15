@@ -17,4 +17,5 @@ Route::get('/', function () {
     return view('welcome');
 });
 
-Route::get('/infoD3', 'ScrapeController@getD3Info');
+Route::get('/major/{major}', 'ScrapeController@getMajorInfo');
+Route::get('/lecturer', 'ScrapeController@getAllLecturer');
