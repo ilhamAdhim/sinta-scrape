@@ -19,3 +19,5 @@ Route::get('/', function () {
 
 Route::get('/major/{major}', 'ScrapeController@getMajorInfo');
 Route::get('/lecturer', 'ScrapeController@getAllLecturerSinta');
+Route::get('/articles/{userID}', 'ScrapeController@getArticlesPerUser');
+Route::get('/stats/{userID}', 'ScrapeController@getStatisticsPerUser');

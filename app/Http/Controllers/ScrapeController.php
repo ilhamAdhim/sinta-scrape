@@ -28,6 +28,7 @@ class ScrapeController extends Controller{
         $link = 'https://sinta.ristekbrin.go.id/departments/detail?page=1&afil=413&id='.$majorID.'&view=authors&sort=year2';
         $crawler = $client->request('GET', $link );
 
+        // Get total amount written in sinta web
         $infoAmount = $crawler->filter('.uk-table > caption')->text();
         $pieces = explode(' ', $infoAmount);
         $sintaAmountLecturerTI = array_pop($pieces);
@@ -40,6 +41,7 @@ class ScrapeController extends Controller{
                 array_push($nameCollection,$node->text());
             });
             $crawler->filter('.uk-description-list-line > dt > a')->each(function($node) use (&$userIDCollection){
+                // Get only the user id from the link
                 preg_match('/id=(.*)&view/', $node->attr('href'), $matches);
                 $extractedUserID = $matches[1];
 
@@ -54,25 +56,82 @@ class ScrapeController extends Controller{
 
         return $collection;
     }
-    public function getScopusStatisticsPerUser(){
+    public function getStatisticsPerUser($userID){
+        $client = new Client();
+        $link = 'https://sinta.ristekbrin.go.id/authors/detail?id='.$userID.'&view=overview';
+        $crawler = $client->request('GET', $link );
 
+        $stats = [];
+        // Scrape stats
+        $crawler->filter('.uk-text-center > .stat-num-pub')->each(function($node) use (&$stats){
+            array_push($stats,$node->text());
+        });
+
+        // Destructure for scopus 
+        // Destructure for gscholar
+        // Destructure for wos 
+
+        return view('stats', [
+            'user' => $userID,
+            'data'  => $stats
+        ]);
     }
 
-    public function getScholarStatisticsPerUser(){
-
-    }
-
-    public function getOverviewPerUser(){
-        // Research Output Scopus
-        // Quartile Scopus
+    public function getOverviewPerUser($userID , $client){
         // Score Scopus, google, WOS
         // Top 5 Paper
     }
 
-    public function getInfoPerUser(){
-        getOverviewPerUser();
-        getScholarStatisticsPerUser();
-        getScopusStatisticsPerUser();
+    public function getArticlesPerUser($userID, $publisher = 'scopus'){
+        $client = new Client();
+
+        // For easier fetch 3 type of documents
+        $publisher = 'scopus' ? 'documentsscopus' : $publisher = 'gscholar' ? 'documentsgs' : 'documentswos';
+        $link = 'https://sinta.ristekbrin.go.id/authors/detail?id='.$userID.'&view='.$publisher;
+
+        $crawler = $client->request('GET', $link );
+
+        // Get journals total amount written in sinta web
+        $infoAmount = $crawler->filter('.uk-table > caption')->text();
+        $pieces = explode(' ', $infoAmount);
+        $sintaCitationAmount = array_pop($pieces);
+
+        var_dump($sintaCitationAmount);
+        $journalCollection = []; $descriptionCollection = [];
+
+        if($sintaCitationAmount > 0){
+            $page = 1;
+            while (count($journalCollection) <= 35) {
+                $link = 'https://sinta.ristekbrin.go.id/authors/detail?page='.$page.'&id='.$userID.'&view='.$publisher;
+                $crawler = $client->request('GET', $link );
+
+                // Get journal Title
+                $crawler->filter('.uk-description-list-line > dt > .paper-link')->each(function($node) use (&$journalCollection){
+                    array_push($journalCollection,$node->text());
+                });
+
+                // Get journal description
+                $crawler->filter('.uk-description-list-line > .indexed-by')->each(function($node) use (&$descriptionCollection){
+                    array_push($descriptionCollection,$node->text());
+                });
+
+                $page++;
+            }
+        }
+
+        // Unfin
+        
+        return view('articles',[
+            'user'  => $userID,
+            'title' => $journalCollection,
+            'desc'  => $descriptionCollection
+        ]);
+    }
+
+    public function getInfoPerUser($userID){
+        $client = new Client();
+        getOverviewPerUser($userID , $client);
+        getScholarStatisticsPerUser($userID , $client);
     }
 
     public function getMajorInfo($major){
