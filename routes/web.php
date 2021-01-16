@@ -18,4 +18,4 @@ Route::get('/', function () {
 });
 
 Route::get('/major/{major}', 'ScrapeController@getMajorInfo');
-Route::get('/lecturer', 'ScrapeController@getAllLecturer');
+Route::get('/lecturer', 'ScrapeController@getAllLecturerSinta');

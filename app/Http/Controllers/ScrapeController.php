@@ -6,25 +6,25 @@ use Goutte\Client;
 
 class ScrapeController extends Controller{
 
-    public function getAllLecturer(){
+    public function getAllLecturerSinta(){
         // Scrape info dosen TI baru MI
         // Get total lecturer of TI   
         $lecturerName = [
             'D3' => $this->getLecturerByMajor('D3'),
             'D4' => $this->getLecturerByMajor('D4'),
         ];
-        
+
         return view('lecturerList' , [
             'data' => $lecturerName
         ]);
     }
 
     public function getLecturerByMajor($major){
+        // Fetch the name and user ID
         $client = new Client();
 
         $majorID = $major == 'D3'? '57401' : '55301';
-        $page = 1; $collection = [];
-
+        $page = 1; $nameCollection = []; $userIDCollection = [];
         $link = 'https://sinta.ristekbrin.go.id/departments/detail?page=1&afil=413&id='.$majorID.'&view=authors&sort=year2';
         $crawler = $client->request('GET', $link );
 
@@ -36,11 +36,21 @@ class ScrapeController extends Controller{
             $link = 'https://sinta.ristekbrin.go.id/departments/detail?page='.$page.'&afil=413&id='.$majorID.'&view=authors&sort=year2';
             $crawler = $client->request('GET', $link );
             
-            $crawler->filter('.uk-description-list-line > dt > a')->each(function($node) use (&$collection){
-                array_push($collection,ucwords($node->text()));
+            $crawler->filter('.uk-description-list-line > dt > a')->each(function($node) use (&$nameCollection){
+                array_push($nameCollection,$node->text());
             });
+            $crawler->filter('.uk-description-list-line > dt > a')->each(function($node) use (&$userIDCollection){
+                preg_match('/id=(.*)&view/', $node->attr('href'), $matches);
+                $extractedUserID = $matches[1];
+
+                array_push($userIDCollection,$extractedUserID);
+            });
+
             $page++;
-        } while (count($collection) < $sintaAmountLecturerTI);
+        } while (count($nameCollection) < $sintaAmountLecturerTI);
+
+        $collection['name'] = $nameCollection;
+        $collection['link']  = $userIDCollection;
 
         return $collection;
     }
@@ -76,17 +86,6 @@ class ScrapeController extends Controller{
             'scopus' => $crawler->filter('.scopus-stat2')->text(),
             'scholar' => $crawler->filter('.sinta-stat2')->text()
         ];
-        
-
-        // statistic from scopus header cell
-        $crawler->filter('.scopus-stat2')->each(function ($node) {
-            // print $node->text();
-        });
-
-        // statistic from gscholar header cell
-        $crawler->filter('.scholar-stat2')->each(function ($node) {
-            print $node->text();
-        });
         
         return view('infoD3', [
             'data' => $scrapeResult
