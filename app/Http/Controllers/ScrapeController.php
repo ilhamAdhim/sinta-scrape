@@ -6,19 +6,18 @@ use Goutte\Client;
 
 class ScrapeController extends Controller{
 
+    // 
     public function getAllLecturerSinta(){
         // Scrape info dosen TI baru MI
         // Get total lecturer of TI   
-        $lecturerName = [
+        $lecturer = [
             'D3' => $this->getLecturerByMajor('D3'),
             'D4' => $this->getLecturerByMajor('D4'),
         ];
-
-        return view('lecturerList' , [
-            'data' => $lecturerName
-        ]);
+        return response()->json($lecturer, 200);
     }
 
+    // Done
     public function getLecturerByMajor($major){
         // Fetch the name and user ID
         $client = new Client();
@@ -52,41 +51,71 @@ class ScrapeController extends Controller{
         } while (count($nameCollection) < $sintaAmountLecturerTI);
 
         $collection['name'] = $nameCollection;
-        $collection['link']  = $userIDCollection;
+        $collection['userID']  = $userIDCollection;
 
         return $collection;
     }
+
+    // Done
     public function getStatisticsPerUser($userID){
         $client = new Client();
         $link = 'https://sinta.ristekbrin.go.id/authors/detail?id='.$userID.'&view=overview';
         $crawler = $client->request('GET', $link );
 
-        $stats = [];
+        $name = $crawler->filter('.au-name')->text();
+        $scrapedStats = [];
         // Scrape stats
-        $crawler->filter('.uk-text-center > .stat-num-pub')->each(function($node) use (&$stats){
-            array_push($stats,$node->text());
+        $crawler->filter('.uk-text-center > .stat-num-pub')->each(function($node) use (&$scrapedStats){
+            array_push($scrapedStats,$node->text());
         });
+        
+        $structuredStats = [
+            "name"  => ucwords($name),
+            "scopus" => [
+                "article"       => $scrapedStats[0],
+                "conference"    => $scrapedStats[1],
+                "other"         => $scrapedStats[2],
+                "documents"     => $scrapedStats[15],
+                "citations"     => $scrapedStats[16],
+                "h-index"       => $scrapedStats[18],
+                "i10-index"     => $scrapedStats[19],
+                "g-index"       => $scrapedStats[20],
+            ],
+            "gscholar" => [
+                "Q1"        => $scrapedStats[3],
+                "Q2"        => $scrapedStats[4],
+                "Q3"        => $scrapedStats[5],
+                "Q4"        => $scrapedStats[6],
+                "undefined" => $scrapedStats[7],
+                "h-index"   => $scrapedStats[23],
+                "i10-index" => $scrapedStats[24],
+                "g-index"   => $scrapedStats[25],
+            ],
+            "sinta" => [
+                "Sinta s1" => $scrapedStats[8],
+                "Sinta s2" => $scrapedStats[9],
+                "Sinta s3" => $scrapedStats[10],
+                "Sinta s4" => $scrapedStats[11],
+                "Sinta s5" => $scrapedStats[12],
+                "Sinta s6" => $scrapedStats[13],
+                "Sinta uncategorized" => $scrapedStats[14],
+            ]
+        ];
 
-        // Destructure for scopus 
-        // Destructure for gscholar
-        // Destructure for wos 
-
-        return view('stats', [
-            'user' => $userID,
-            'data'  => $stats
-        ]);
+        return response()->json($structuredStats, 200);
     }
 
-    public function getOverviewPerUser($userID , $client){
-        // Score Scopus, google, WOS
-        // Top 5 Paper
-    }
-
-    public function getArticlesPerUser($userID, $publisher = 'scopus'){
+    public function getArticlesPerUser($userID, $publisher = 'gscholar'){
         $client = new Client();
 
         // For easier fetch 3 type of documents
-        $publisher = 'scopus' ? 'documentsscopus' : $publisher = 'gscholar' ? 'documentsgs' : 'documentswos';
+        if($publisher == 'scopus'){
+            $publisher = 'documentsscopus';
+        }
+        else {
+            $publisher = 'documentsgs';
+        }
+
         $link = 'https://sinta.ristekbrin.go.id/authors/detail?id='.$userID.'&view='.$publisher;
 
         $crawler = $client->request('GET', $link );
@@ -96,7 +125,8 @@ class ScrapeController extends Controller{
         $pieces = explode(' ', $infoAmount);
         $sintaCitationAmount = array_pop($pieces);
 
-        var_dump($sintaCitationAmount);
+        $name = $crawler->filter('.au-name')->text();
+
         $journalCollection = []; $descriptionCollection = [];
 
         if($sintaCitationAmount > 0){
@@ -119,36 +149,47 @@ class ScrapeController extends Controller{
             }
         }
 
+        $result = [
+            'publisher'  => $publisher,
+            'name'       => $name
+        ];
+        for ($i=0; $i < count($journalCollection); $i++) { 
+            $result['journals'][$i]['title'] = $journalCollection[$i];
+            $result['journals'][$i]['desc'] = $descriptionCollection[$i];
+        }
+
         // Unfin
-        
-        return view('articles',[
-            'user'  => $userID,
-            'title' => $journalCollection,
-            'desc'  => $descriptionCollection
-        ]);
+        return response()->json($result, 200);
     }
 
-    public function getInfoPerUser($userID){
-        $client = new Client();
-        getOverviewPerUser($userID , $client);
-        getScholarStatisticsPerUser($userID , $client);
-    }
-
+    // Done
     public function getMajorInfo($major){
         $client = new Client();
         $majorID = $major == 'D3'? '57401' : '55301';
         $link = 'https://sinta.ristekbrin.go.id/departments/detail?afil=413&id='.$majorID.'&view=overview';
         $crawler = $client->request('GET', $link );
 
-        $scrapeResult = [
-            'sinta' => $crawler->filter('.sinta-stat2')->text(),
-            'scopus' => $crawler->filter('.scopus-stat2')->text(),
-            'scholar' => $crawler->filter('.sinta-stat2')->text()
+        $scrapedMajorStats = [];
+        $crawler->filter('.res-out-val')->each(function($node) use (&$scrapedMajorStats){
+            array_push($scrapedMajorStats,$node->text());
+        });
+
+        $structuredResult = [
+            'major'     => $major,
+            'scopus'    => [
+                    'document'      => $scrapedMajorStats[0],
+                    'citations'     => $scrapedMajorStats[1],
+                    'journals'      => $scrapedMajorStats[4],
+                    'bookchapters'  => $scrapedMajorStats[5],
+                    'papers'        => $scrapedMajorStats[6],
+                ],
+            'gscholar' => [
+                    'document'      => $scrapedMajorStats[2],
+                    'citations'     => $scrapedMajorStats[3],
+                ]
         ];
         
-        return view('infoD3', [
-            'data' => $scrapeResult
-        ]);
+        return response()->json($structuredResult, 200);
     }
 
     public function test(){
