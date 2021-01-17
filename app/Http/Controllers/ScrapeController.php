@@ -5,8 +5,7 @@ namespace App\Http\Controllers;
 use Goutte\Client;
 
 class ScrapeController extends Controller{
-
-    // 
+   
     public function getAllLecturerSinta(){
         // Scrape info dosen TI baru MI
         // Get total lecturer of TI   
@@ -17,13 +16,12 @@ class ScrapeController extends Controller{
         return response()->json($lecturer, 200);
     }
 
-    // Done
     public function getLecturerByMajor($major){
         // Fetch the name and user ID
         $client = new Client();
 
         $majorID = $major == 'D3'? '57401' : '55301';
-        $page = 1; $nameCollection = []; $userIDCollection = []; $gIDCollection = [];
+        $page = 1; $nameCollection = []; $userIDCollection = []; $gIDCollection = []; $imageCollection = [];
         $link = 'https://sinta.ristekbrin.go.id/departments/detail?page=1&afil=413&id='.$majorID.'&view=authors&sort=year2';
         $crawler = $client->request('GET', $link );
 
@@ -36,9 +34,17 @@ class ScrapeController extends Controller{
             $link = 'https://sinta.ristekbrin.go.id/departments/detail?page='.$page.'&afil=413&id='.$majorID.'&view=authors&sort=year2';
             $crawler = $client->request('GET', $link );
             
+            // Scrape name
             $crawler->filter('.uk-description-list-line > dt > a')->each(function($node) use (&$nameCollection){
                 array_push($nameCollection,$node->text());
             });
+
+            // Scrape profile picture
+            $crawler->filter('.author-photo-small')->each(function($node) use (&$imageCollection){
+                array_push($imageCollection,$node->attr('src'));
+            });
+
+            // Scrape Sinta user ID
             $crawler->filter('.uk-description-list-line > dt > a')->each(function($node) use (&$userIDCollection){
                 // Get only the user id from the link
                 preg_match('/id=(.*)&view/', $node->attr('href'), $matches);
@@ -47,6 +53,7 @@ class ScrapeController extends Controller{
                 array_push($userIDCollection,$extractedUserID);
             });
 
+            // Scrape gscholar ID
             $crawler->filter('.author-photo-small')->each(function($node) use (&$gIDCollection){
                  // Get only the user id from the link
                  preg_match('/user=(.*)&citpid/', $node->attr('src'), $matches);
@@ -60,6 +67,7 @@ class ScrapeController extends Controller{
 
         for ($i=0; $i < count($nameCollection); $i++) { 
             $collection[$i]['name'] = $nameCollection[$i];
+            $collection[$i]['image'] = $imageCollection[$i];
             $collection[$i]['userID']  = $userIDCollection[$i];
             $collection[$i]['gscholarID'] = $gIDCollection[$i];
         }
@@ -67,7 +75,6 @@ class ScrapeController extends Controller{
         return $collection;
     }
 
-    // Done
     public function getStatisticsPerUser($userID){
         $client = new Client();
         $link = 'https://sinta.ristekbrin.go.id/authors/detail?id='.$userID.'&view=overview';
@@ -116,33 +123,42 @@ class ScrapeController extends Controller{
         return response()->json($structuredStats, 200);
     }
 
-    public function getArticlesPerUser($userID, $publisher = 'gscholar'){
+    public function getArticlesPerUser($userID){
+        $client = new Client();
+        $link = 'https://sinta.ristekbrin.go.id/authors/detail?id='.$userID.'&view=overview';
+        $crawler = $client->request('GET', $link );
+        $name = $crawler->filter('.au-name')->text();
+
+        // Scrape gscholar articles first then scopus
+        $articles = [
+            'name'      => $name,
+            // 'gscholar'  => $this->getArticlesPerUserByPublisher($userID, 'gscholar'),
+            'scopus'    => $this->getArticlesPerUserByPublisher($userID, 'scopus')
+        ];
+
+        return response()->json($articles, 200);
+    }
+
+    public function getArticlesPerUserByPublisher($userID, $publisher = 'gscholar'){
         $client = new Client();
 
         // For easier fetch 3 type of documents
-        if($publisher == 'scopus'){
-            $publisher = 'documentsscopus';
-        }
-        else {
-            $publisher = 'documentsgs';
-        }
-
+        $publisher = $publisher == 'scopus' ? 'documentsscopus' : 'documentsgs';
         $link = 'https://sinta.ristekbrin.go.id/authors/detail?id='.$userID.'&view='.$publisher;
-
         $crawler = $client->request('GET', $link );
 
         // Get journals total amount written in sinta web
         $infoAmount = $crawler->filter('.uk-table > caption')->text();
         $pieces = explode(' ', $infoAmount);
         $sintaCitationAmount = array_pop($pieces);
-
         $name = $crawler->filter('.au-name')->text();
 
         $journalCollection = []; $descriptionCollection = [];
+        $statJournal = [];
 
         if($sintaCitationAmount > 0){
             $page = 1;
-            while (count($journalCollection) <= 35) {
+            do {
                 $link = 'https://sinta.ristekbrin.go.id/authors/detail?page='.$page.'&id='.$userID.'&view='.$publisher;
                 $crawler = $client->request('GET', $link );
 
@@ -156,24 +172,37 @@ class ScrapeController extends Controller{
                     array_push($descriptionCollection,$node->text());
                 });
 
+                // Get citations
+                $crawler->filter('tr > .index-val')->each(function($node) use (&$statJournal){
+                    array_push($statJournal,$node->text());
+                }); 
                 $page++;
+            } while (count($journalCollection) < $sintaCitationAmount);
+             
+            for ($i=0; $i < count($journalCollection); $i++) { 
+                $result[$i]['title'] = $journalCollection[$i];
+                
+                // Get vol, issue, and year
+                $pieces = explode('|', $descriptionCollection[$i]);
+                $result[$i]['desc']  = trim($pieces[0]);
+                $result[$i]['year']  = trim($pieces[3]);
             }
-        }
 
-        $result = [
-            'publisher'  => $publisher,
-            'name'       => $name
-        ];
-        for ($i=0; $i < count($journalCollection); $i++) { 
-            $result['journals'][$i]['title'] = $journalCollection[$i];
-            $result['journals'][$i]['desc'] = $descriptionCollection[$i];
-        }
+            // statJournal[evenIndex] always contains citations
+            $index = 0;
+            foreach($statJournal as $key => $citation){
+                if($key%2 != 0){
+                    $result[$index]['citation'] = $citation;
+                    $index++;
+                }
+                else continue;
+            }
 
-        // Unfin
-        return response()->json($result, 200);
+        }else $result = [];
+
+        return $result;
     }
 
-    // Done
     public function getMajorInfo($major){
         $client = new Client();
         $majorID = $major == 'D3'? '57401' : '55301';
@@ -203,14 +232,6 @@ class ScrapeController extends Controller{
         return response()->json($structuredResult, 200);
     }
 
-    public function test(){
-        
-        $client = new Client();
-        $crawler = $client->request('GET', 'https://www.symfony.com/blog/');
-        $crawler->filter('h2 > a')->each(function ($node) {
-            print $node->text()."\n";
-        });
-    }
 }
 
 ?>
