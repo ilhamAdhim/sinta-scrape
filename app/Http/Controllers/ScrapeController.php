@@ -23,7 +23,7 @@ class ScrapeController extends Controller{
         $client = new Client();
 
         $majorID = $major == 'D3'? '57401' : '55301';
-        $page = 1; $nameCollection = []; $userIDCollection = [];
+        $page = 1; $nameCollection = []; $userIDCollection = []; $gIDCollection = [];
         $link = 'https://sinta.ristekbrin.go.id/departments/detail?page=1&afil=413&id='.$majorID.'&view=authors&sort=year2';
         $crawler = $client->request('GET', $link );
 
@@ -47,12 +47,23 @@ class ScrapeController extends Controller{
                 array_push($userIDCollection,$extractedUserID);
             });
 
+            $crawler->filter('.author-photo-small')->each(function($node) use (&$gIDCollection){
+                 // Get only the user id from the link
+                 preg_match('/user=(.*)&citpid/', $node->attr('src'), $matches);
+                 $extractedID = $matches[1];
+ 
+                 array_push($gIDCollection,$extractedID);
+            });
+
             $page++;
         } while (count($nameCollection) < $sintaAmountLecturerTI);
 
-        $collection['name'] = $nameCollection;
-        $collection['userID']  = $userIDCollection;
-
+        for ($i=0; $i < count($nameCollection); $i++) { 
+            $collection[$i]['name'] = $nameCollection[$i];
+            $collection[$i]['userID']  = $userIDCollection[$i];
+            $collection[$i]['gscholarID'] = $gIDCollection[$i];
+        }
+        
         return $collection;
     }
 
