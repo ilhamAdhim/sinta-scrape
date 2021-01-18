@@ -1,4 +1,13 @@
-REST API JTI Monitoring Journal
+# REST API JTI Monitoring Journal
 
-Not finished :
-journals scraped still limited on 40 journals only
+Usage: 
+
+Features : 
+1. Get Major Info
+2. Get All user from polinema with defined Major ID 
+3. Get Journals for each Sinta user
+4. Get Statistics for each Sinta user
+
+
+
+Unfinished : Gather annual citation data for scopus for each sinta user
