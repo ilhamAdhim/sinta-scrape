@@ -20,18 +20,40 @@
             // Scrape gscholar articles first then scopus
             $articles = [
                 'name'      => $name,
+                
                 // You may uncomment this one, but do notice that the process will be slower
                 // 'gscholar'  => $this->getArticlesPerUserByPublisher($userID, 'gscholar'),
                 'scopus'    => $this->getArticlesPerUserByPublisher($userID, 'scopus')
             ];
 
+            $articles['citation'] = $this->getCitationPerYear($articles['scopus']);
+
             return $articles;
+        }
+
+        public function getCitationPerYear($articles){
+            $citationPerYear = [];
+            // Gather all year that exists in API Response
+            $yearCollection = array_column($articles,'year');
+
+            // Sum all citation in a year (year is the key)
+            foreach ($yearCollection as $key => $value) {
+                foreach ($articles as $item) {
+                    if($item['year'] == $value)
+                        $citationPerYear[$value] += $item['citation'];
+                }
+            }
+
+            ksort($citationPerYear);
+            $citationPerYear['total'] = array_sum(array_column($articles, 'citation'));
+
+            return $citationPerYear;         
         }
 
         public function getArticlesPerUserByPublisher($userID, $publisher = 'gscholar'){
             $client = new Client();
 
-            // For easier fetch 3 type of documents
+            // For easier fetch 2 type of documents
             $publisher = $publisher == 'scopus' ? 'documentsscopus' : 'documentsgs';
             $link = 'https://sinta.ristekbrin.go.id/authors/detail?id='.$userID.'&view='.$publisher;
             $crawler = $client->request('GET', $link );
@@ -74,7 +96,7 @@
                     // Get vol, issue, and year
                     $pieces = explode('|', $descriptionCollection[$i]);
                     $result[$i]['desc']  = trim($pieces[0]);
-                    $result[$i]['year']  = trim($pieces[3]);
+                    $result[$i]['year']  = trim(explode('-',$pieces[3])[0]);
                 }
 
                 // statJournal[evenIndex] always contains citations

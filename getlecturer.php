@@ -12,10 +12,8 @@
         public function getAllLecturerSinta(){
             // Scrape info dosen TI baru MI
             // Get total lecturer of TI   
-            $lecturer = [
-                'D3' => $this->getLecturerByMajor('D3'),
-                'D4' => $this->getLecturerByMajor('D4'),
-            ];
+            $lecturer = array_merge($this->getLecturerByMajor('D3'),$this->getLecturerByMajor('D4'));
+
             return $lecturer;
         }
         
