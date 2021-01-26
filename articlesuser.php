@@ -35,14 +35,18 @@
             $citationPerYear = [];
             // Gather all year that exists in API Response
             $yearCollection = array_column($articles,'year');
+            $citationCollection = [];
 
             // Sum all citation in a year (year is the key)
-            foreach ($yearCollection as $key => $value) {
-                foreach ($articles as $item) {
-                    if($item['year'] == $value)
-                        $citationPerYear[$value] += $item['citation'];
+                //1. Iterate over the article list to search for specific year 
+                foreach ($yearCollection as $key => $value) {
+                    //2. Get and sum all citations for that year
+                   $citationPerYear[$value] = array_sum(array_map(
+                                                    function($item) use (&$value){
+                                                        if($item['year'] == $value)
+                                                            return $item['citation'];
+                                                    }, $articles));
                 }
-            }
 
             ksort($citationPerYear);
             $citationPerYear['total'] = array_sum(array_column($articles, 'citation'));
